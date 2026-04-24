@@ -18,7 +18,7 @@ class Board extends StatefulWidget {
   State<Board> createState() => _BoardState();
 }
 
-enum BoardTool { pen, hand, eraser, highLighter }
+enum BoardTool { pen, hand, eraser, highLighter, shape }
 
 class _BoardState extends State<Board> {
   // erazePointer
@@ -38,6 +38,9 @@ class _BoardState extends State<Board> {
   bool _highLight = false;
   // bool _isErasing = false;
   final highlightColor = Colors.cyanAccent;
+
+  ShapeType selectedShape = ShapeType.rectangle;
+  bool isShapeFilled = false;
 
   void highLight(bool highLight) {
     setState(() {
@@ -148,6 +151,144 @@ class _BoardState extends State<Board> {
   }
 
   final controller = MousePointers.instance;
+
+  IconData _getShapeIcon(ShapeType type, {bool? filled}) {
+    final isFill = filled ?? isShapeFilled;
+    switch (type) {
+      case ShapeType.circle:
+        return isFill ? Icons.circle : Icons.circle_outlined;
+      case ShapeType.rectangle:
+        return isFill ? Icons.rectangle : Icons.rectangle_outlined;
+      case ShapeType.square:
+        return isFill ? Icons.square : Icons.square_outlined;
+      case ShapeType.line:
+        return Icons.horizontal_rule;
+      case ShapeType.arrow:
+        return Icons.arrow_right_alt;
+      case ShapeType.polygon:
+        return Icons.polyline_outlined;
+      default:
+        return Icons.category_outlined;
+    }
+  }
+
+  void _showShapeSelection(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Select Shape',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const Text('Fill'),
+                          Switch(
+                            value: isShapeFilled,
+                            onChanged: (value) {
+                              setSheetState(() {
+                                isShapeFilled = value;
+                              });
+                              setState(() {});
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 20,
+                    runSpacing: 20,
+                    children: ShapeType.values
+                        .where((e) => e != ShapeType.none)
+                        .map((type) {
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                selectedShape = type;
+                                _currentTool = BoardTool.shape;
+                                cursorKey = 'pen'; // Or custom shape cursor
+                              });
+                              Navigator.pop(context);
+                            },
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        selectedShape == type &&
+                                            _currentTool == BoardTool.shape
+                                        ? Colors.blue.withOpacity(0.1)
+                                        : Colors.transparent,
+                                    border: Border.all(
+                                      color:
+                                          selectedShape == type &&
+                                              _currentTool == BoardTool.shape
+                                          ? Colors.blue
+                                          : Colors.grey.shade300,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    _getShapeIcon(type),
+                                    size: 30,
+                                    color:
+                                        selectedShape == type &&
+                                            _currentTool == BoardTool.shape
+                                        ? Colors.blue
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  type.name[0].toUpperCase() +
+                                      type.name.substring(1),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color:
+                                        selectedShape == type &&
+                                            _currentTool == BoardTool.shape
+                                        ? Colors.blue
+                                        : Colors.black54,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        })
+                        .toList(),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -304,9 +445,24 @@ class _BoardState extends State<Board> {
                             type: BoardTool.pen,
                             strokeWidth: pensize,
                             color: penColor,
+                            isFilled: false,
                             points: [_screenToCanvas(details.localFocalPoint)],
                           );
                           // paths.add(currentPath!);
+                          page[currentPage].paths.add(currentPath!);
+                        });
+                      } else if (details.pointerCount == 1 &&
+                          !_isZooming &&
+                          _currentTool == BoardTool.shape) {
+                        setState(() {
+                          currentPath = DrawingPath(
+                            type: BoardTool.shape,
+                            shapeType: selectedShape,
+                            strokeWidth: pensize,
+                            color: penColor,
+                            isFilled: isShapeFilled,
+                            points: [_screenToCanvas(details.localFocalPoint)],
+                          );
                           page[currentPage].paths.add(currentPath!);
                         });
                       } else if (details.pointerCount == 1 &&
@@ -317,6 +473,7 @@ class _BoardState extends State<Board> {
                             type: BoardTool.eraser,
                             strokeWidth: erazePointer,
                             color: Colors.white,
+                            isFilled: false,
                             points: [_screenToCanvas(details.localFocalPoint)],
                           );
                           // paths.add(currentPath!);
@@ -330,6 +487,7 @@ class _BoardState extends State<Board> {
                             type: BoardTool.highLighter,
                             strokeWidth: highLightPointerSize,
                             color: highlightColor,
+                            isFilled: false,
                             points: [_screenToCanvas(details.localFocalPoint)],
                           );
                           // paths.add(currentPath!);
@@ -381,8 +539,63 @@ class _BoardState extends State<Board> {
                           currentPath != null &&
                           !_isZooming &&
                           (_currentTool == BoardTool.pen ||
-                              _currentTool == BoardTool.eraser)) {
+                              _currentTool == BoardTool.eraser ||
+                              _currentTool == BoardTool.shape)) {
                         // print(penColor);
+                        if (_currentTool == BoardTool.shape) {
+                          if (currentPath!.shapeType != ShapeType.polygon) {
+                            if (currentPath!.points.length > 1) {
+                              currentPath!.points.removeLast();
+                            }
+                          }
+                        }
+
+                        if (_currentTool == BoardTool.eraser) {
+                          final canvasPoint = _screenToCanvas(
+                            details.localFocalPoint,
+                          );
+                          final pathsToRemove = <DrawingPath>[];
+                          for (final path in page[currentPage].paths) {
+                            if (path.type == BoardTool.eraser) continue;
+
+                            bool hit = false;
+                            if (path.type == BoardTool.shape) {
+                              // Simplified hit test for shapes
+                              if (path.points.isNotEmpty) {
+                                final start = path.points.first;
+                                final end = path.points.last;
+                                final rect = Rect.fromPoints(
+                                  start,
+                                  end,
+                                ).inflate(erazePointer / 2);
+                                if (rect.contains(canvasPoint)) {
+                                  hit = true;
+                                }
+                              }
+                            } else {
+                              for (final point in path.points) {
+                                if ((point - canvasPoint).distance <
+                                    erazePointer) {
+                                  hit = true;
+                                  break;
+                                }
+                              }
+                            }
+
+                            if (hit) {
+                              pathsToRemove.add(path);
+                            }
+                          }
+
+                          if (pathsToRemove.isNotEmpty) {
+                            setState(() {
+                              page[currentPage].paths.removeWhere(
+                                (p) => pathsToRemove.contains(p),
+                              );
+                            });
+                          }
+                        }
+
                         setState(() {
                           currentPath!.points.add(
                             _screenToCanvas(details.localFocalPoint),
@@ -500,17 +713,9 @@ class _BoardState extends State<Board> {
                                   strokeWidth: 1.5,
                                 ),
                                 onPressed: () => setState(() {
-                                  // mouse = MouseRegion(
-                                  //   hitTestBehavior: HitTestBehavior.translucent,
-                                  //   cursor: SystemMouseCursors.alias,
-                                  //   child: Container(
-                                  //     height: 80,
-                                  //     width: 80,
-                                  //     color: Colors.red,
-                                  //   ),
-                                  // );
-
-                                  penColor = colors[0];
+                                  penColor = prevSelectedColor == Colors.white
+                                      ? colors[0]
+                                      : prevSelectedColor;
                                   _currentTool = BoardTool.pen;
                                   // _cursor = SystemMouseCursors.precise;
                                   cursorKey = 'pen';
@@ -551,6 +756,25 @@ class _BoardState extends State<Board> {
                                   size: 30,
                                 ),
                                 tooltip: 'Highlighter Tool',
+                              ),
+                              IconButton(
+                                onPressed: () {
+                                  if (_currentTool == BoardTool.shape) {
+                                    _showShapeSelection(context);
+                                  } else {
+                                    setState(() {
+                                      _currentTool = BoardTool.shape;
+                                    });
+                                  }
+                                },
+                                icon: Icon(
+                                  _getShapeIcon(selectedShape),
+                                  color: _currentTool == BoardTool.shape
+                                      ? Colors.blue
+                                      : null,
+                                  size: 30,
+                                ),
+                                tooltip: 'Shape Tool',
                               ),
                               Padding(
                                 padding: const EdgeInsets.symmetric(
